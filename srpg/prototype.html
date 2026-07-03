@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>翠嵐と幽闇 — SRPGプロトタイプ</title>
+<style>
+:root{
+  --night:#14162a;
+  --panel:#1d2038;
+  --panel2:#242849;
+  --ink:#e6e0cf;
+  --ink-dim:#9a94b8;
+  --lantern:#e2a24e;
+  --raiden:#8fd8ff;
+  --violet:#a678e8;
+  --foe:#e0604a;
+  --ground:#232645;
+  --ground-line:#2e3158;
+  --wall:#4a3b2c;
+  --wall-top:#6b5638;
+  --shadow-tile:#120e24;
+  --good:#7fd8a0;
+  font-size:15px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1200px 500px at 70% -10%, #262a52 0%, transparent 60%),
+    radial-gradient(800px 400px at 10% 110%, #1d1636 0%, transparent 55%),
+    var(--night);
+  color:var(--ink);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic Medium","Yu Gothic",system-ui,sans-serif;
+  min-height:100vh;
+}
+#app{max-width:1080px;margin:0 auto;padding:18px 16px 40px}
+header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;border-bottom:1px solid #34375e;padding-bottom:12px}
+h1{
+  font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+  font-weight:600;font-size:1.55rem;letter-spacing:.06em;
+}
+h1 .sub{display:block;font-size:.72rem;color:var(--lantern);letter-spacing:.28em;margin-top:4px;font-family:inherit}
+.hud{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.hud .turn{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:1.05rem}
+.chip{padding:3px 12px;border-radius:2px;font-size:.78rem;letter-spacing:.12em;border:1px solid}
+.chip.player{color:var(--raiden);border-color:#3a5f77;background:#1a2c3d}
+.chip.enemy{color:var(--foe);border-color:#6e3a30;background:#331d1a}
+button{
+  font-family:inherit;color:var(--ink);background:var(--panel2);
+  border:1px solid #3c4070;border-radius:3px;padding:6px 12px;font-size:.82rem;
+  cursor:pointer;letter-spacing:.05em;
+}
+button:hover{border-color:var(--lantern);color:var(--lantern)}
+button:focus-visible{outline:2px solid var(--lantern);outline-offset:2px}
+button:disabled{opacity:.38;cursor:default}
+button:disabled:hover{border-color:#3c4070;color:var(--ink)}
+main{display:flex;gap:16px;align-items:flex-start}
+#boardWrap{flex:1 1 auto;min-width:0;overflow-x:auto;padding-bottom:6px}
+#board{
+  display:grid;grid-template-columns:repeat(13,1fr);gap:2px;
+  background:#0d0f20;border:1px solid #34375e;padding:6px;border-radius:4px;
+  min-width:560px;
+}
+.tile{
+  position:relative;aspect-ratio:1;background:var(--ground);
+  border:1px solid var(--ground-line);border-radius:2px;cursor:pointer;
+}
+.tile.wall{
+  background:linear-gradient(160deg,var(--wall-top) 0%,var(--wall) 45%);
+  border-color:#2c2318;cursor:default;
+}
+.tile.wall::after{content:"";position:absolute;inset:22%;border:1px solid #00000055;border-radius:1px}
+.tile.shadow{background:var(--shadow-tile);border-color:#231b3f}
+.tile.shadow::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 60%, #4326661f 0%, transparent 70%)}
+.tile.mv{box-shadow:inset 0 0 0 2px #8fd8ff88;background:#24405a}
+.tile.shadow.mv{background:#1c2e46}
+.tile.tg{box-shadow:inset 0 0 0 2px var(--foe);background:#3d2330}
+.tile.tp{box-shadow:inset 0 0 0 2px var(--violet);background:#2c2350}
+.tile.selfrom{box-shadow:inset 0 0 0 2px var(--lantern)}
+.unit{
+  position:absolute;inset:6% 6% 20% 6%;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-weight:600;
+  font-size:clamp(.7rem,2.2vw,1.05rem);
+  border:2px solid;user-select:none;
+}
+.unit.ally{background:#14314a;border-color:var(--raiden);color:var(--raiden)}
+.unit.ally.celia{background:#291a44;border-color:var(--violet);color:#cbaaf5}
+.unit.foe{background:#3a1c16;border-color:var(--foe);color:#f0937f}
+.unit.done{filter:grayscale(.9) brightness(.65)}
+.unit.selected{box-shadow:0 0 0 3px #e2a24e88}
+.hpbar{position:absolute;left:8%;right:8%;bottom:7%;height:9%;background:#000000aa;border-radius:2px;overflow:hidden}
+.hpbar i{display:block;height:100%;background:var(--good);transition:width .25s}
+.hpbar.low i{background:var(--foe)}
+.status{position:absolute;top:-2%;right:2%;font-size:.6rem;line-height:1;display:flex;flex-direction:column;gap:1px}
+.status span{background:#000c;border:1px solid var(--violet);color:#cbaaf5;padding:1px 3px;border-radius:2px;letter-spacing:.05em}
+.dmgpop{
+  position:absolute;left:50%;top:10%;transform:translateX(-50%);
+  font-family:"Hiragino Mincho ProN",serif;font-weight:700;font-size:1rem;color:#ffd9a0;
+  text-shadow:0 1px 3px #000;pointer-events:none;z-index:5;
+  animation:pop .8s ease-out forwards;font-variant-numeric:tabular-nums;
+}
+.dmgpop.heal{color:var(--good)}
+@keyframes pop{0%{opacity:0;translate:0 6px}15%{opacity:1}100%{opacity:0;translate:0 -18px}}
+@media (prefers-reduced-motion:reduce){.dmgpop{animation-duration:.01s}.hpbar i{transition:none}}
+#panel{flex:0 0 300px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid #34375e;border-radius:4px;padding:12px 14px}
+.card h2{
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:1rem;font-weight:600;
+  letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.elechip{font-size:.68rem;padding:1px 7px;border:1px solid var(--ink-dim);border-radius:2px;color:var(--ink-dim);letter-spacing:.15em;font-family:"Hiragino Kaku Gothic ProN",sans-serif}
+.bars{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.bar{display:grid;grid-template-columns:2.4em 1fr 4.2em;gap:8px;align-items:center;font-size:.75rem;color:var(--ink-dim)}
+.bar .track{height:8px;background:#0d0f20;border-radius:2px;overflow:hidden}
+.bar .track i{display:block;height:100%}
+.bar.hp .track i{background:var(--good)}
+.bar.mp .track i{background:var(--raiden)}
+.bar .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+.stats{display:flex;gap:14px;font-size:.78rem;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink);font-weight:600;margin-left:3px}
+.skill{
+  width:100%;text-align:left;margin-top:6px;padding:8px 10px;line-height:1.45;
+  display:block;background:var(--panel2);
+}
+.skill .sname{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:.92rem;letter-spacing:.1em}
+.skill .scost{float:right;color:var(--raiden);font-size:.75rem;font-variant-numeric:tabular-nums}
+.skill .sdesc{display:block;font-size:.7rem;color:var(--ink-dim);margin-top:2px;letter-spacing:.02em}
+.skill.armed{border-color:var(--lantern);background:#33301f}
+.rowbtns{display:flex;gap:8px;margin-top:10px}
+.rowbtns button{flex:1}
+#log{max-height:230px;overflow-y:auto;font-size:.76rem;line-height:1.7;color:var(--ink-dim)}
+#log .imp{color:var(--ink)}
+#log .sys{color:var(--lantern)}
+#log p{border-bottom:1px dashed #2c2f55;padding:2px 0}
+.hint{font-size:.76rem;color:var(--ink-dim);line-height:1.8}
+#overlay{
+  position:fixed;inset:0;background:#0a0b18e6;display:flex;align-items:center;justify-content:center;
+  padding:20px;z-index:20;
+}
+#overlay.hidden{display:none}
+.dialog{max-width:640px;width:100%;background:var(--panel);border:1px solid var(--lantern);border-radius:5px;padding:26px 28px;max-height:88vh;overflow-y:auto}
+.dialog h2{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:1.4rem;letter-spacing:.12em;margin-bottom:4px}
+.dialog .lede{color:var(--lantern);font-size:.75rem;letter-spacing:.2em;margin-bottom:14px}
+.dialog p,.dialog li{font-size:.83rem;line-height:1.9;color:var(--ink)}
+.dialog ul{padding-left:1.3em;margin:6px 0 12px}
+.dialog h3{font-family:"Hiragino Mincho ProN",serif;font-size:.95rem;margin:14px 0 4px;color:var(--lantern);letter-spacing:.1em}
+.dialog table{border-collapse:collapse;margin:6px 0 10px;font-size:.78rem;font-variant-numeric:tabular-nums}
+.dialog td,.dialog th{border:1px solid #3c4070;padding:4px 12px;text-align:left}
+.dialog .start{margin-top:18px;width:100%;padding:11px;font-size:1rem;letter-spacing:.3em;font-family:"Hiragino Mincho ProN",serif;background:#33301f;border-color:var(--lantern);color:var(--lantern)}
+.result-title{font-size:2rem !important;text-align:center;margin:10px 0 6px !important}
+.result-body{text-align:center;margin-bottom:8px}
+@media (max-width:860px){
+  main{flex-direction:column}
+  #panel{flex:1 1 auto;width:100%}
+}
+</style>
+
+<div id="app">
+  <header>
+    <h1>翠嵐と幽闇<span class="sub">収穫祭の夜 · 工房街防衛戦 — SRPG PROTOTYPE</span></h1>
+    <div class="hud">
+      <span class="turn">ターン <b id="turnNo">1</b></span>
+      <span class="chip player" id="phaseChip">プレイヤーフェイズ</span>
+      <button id="helpBtn">遊び方</button>
+      <button id="resetBtn">リスタート</button>
+    </div>
+  </header>
+  <main>
+    <div id="boardWrap"><div id="board" aria-label="戦闘マップ"></div></div>
+    <aside id="panel">
+      <div class="card" id="unitCard"></div>
+      <div class="card"><h2>戦闘ログ</h2><div id="log"></div></div>
+    </aside>
+  </main>
+</div>
+
+<div id="overlay">
+  <div class="dialog" id="dialogBox"></div>
+</div>
+
+<script>
+"use strict";
+/* ==================== データ ==================== */
+const W = 13, H = 9;
+const MAP = [
+  ".............",
+  "..#*....#*...",
+  ".......*.....",
+  ".#*.......#*.",
+  ".....#*......",
+  ".#*.......#*.",
+  "....*........",
+  "..#*....#*...",
+  ".............",
+];
+const ELE_JP = {wind:"風", thunder:"雷", fire:"火", steel:"鋼", dark:"闇", none:"無"};
+function eleMult(a, d){
+  if(a === "thunder" && d === "steel") return 1.5;
+  if(a === "wind"    && d === "fire")  return 1.25;
+  if(a === "fire"    && d === "wind")  return 0.75;
+  return 1;
+}
+const DUKE_SKILLS = [
+  {id:"zan",  name:"斬撃",       mp:0, pow:4,  ele:"none",    kind:"range",    min:1, max:1, desc:"刀による通常攻撃。射程1"},
+  {id:"sayo", name:"小夜嵐",     mp:2, pow:5,  ele:"wind",    kind:"line",     min:1, max:3, desc:"直線上・射程3の風の斬撃。壁で止まる。低燃費"},
+  {id:"ina",  name:"稲魂",       mp:5, pow:6,  ele:"thunder", kind:"teleport", min:1, max:4, desc:"刀を投げた空きマス(4以内)へ転移し、隣接する敵全てに雷撃"},
+  {id:"kor",  name:"荒嵐破",     mp:6, pow:10, ele:"thunder", kind:"range",    min:1, max:2, desc:"風雷の嵐を放つ切り札。射程1-2・高威力"},
+];
+const CELIA_SKILLS = [
+  {id:"tan",  name:"短剣",             mp:0, pow:3, ele:"dark", kind:"range", min:1, max:1, desc:"影喰による通常攻撃。射程1"},
+  {id:"rise", name:"シャドウライズ",   mp:3, pow:5, ele:"dark", kind:"range", min:1, max:3, fx:"float", desc:"影から重力を噴出し対象を浮かせ、次の行動を封じる。対象が影マスなら威力+3"},
+  {id:"snare",name:"グラヴィティスネア",mp:4, pow:2, ele:"dark", kind:"range", min:1, max:3, fx:"bind",  desc:"重力場で拘束し、2ターン移動不能にする"},
+  {id:"void", name:"ヴォイドリバース", mp:3, pow:3, ele:"dark", kind:"burst",              desc:"隣接する敵全てを2マス弾き飛ばす。壁や味方に激突すると+2ダメージ"},
+];
+function makeUnits(){
+  return [
+    {id:"duke",  side:"ally", cls:"",      name:"デューク", kanji:"デ", col:1,  row:4, hp:34, maxhp:34, mp:14, maxmp:14, atk:9, def:5, mov:5, ele:"wind",  skills:DUKE_SKILLS,  note:"風＋雷の魔法剣士。風雷（覚醒型）"},
+    {id:"celia", side:"ally", cls:"celia", name:"セリア",   kanji:"セ", col:1,  row:6, hp:26, maxhp:26, mp:16, maxmp:16, atk:7, def:4, mov:4, ele:"dark",  skills:CELIA_SKILLS, note:"闇（重力）の諜報戦闘要員。影喰（覚醒型）"},
+    {id:"sw1",   side:"foe",  cls:"",      name:"実行部隊・剣士A", kanji:"剣", col:9,  row:2, hp:26, maxhp:26, mp:0, maxmp:0, atk:8, def:5, mov:4, ele:"steel", atkMin:1, atkMax:1, pow:4, aele:"steel", note:"鋼の重装剣士。雷に弱い"},
+    {id:"sw2",   side:"foe",  cls:"",      name:"実行部隊・剣士B", kanji:"剣", col:9,  row:6, hp:26, maxhp:26, mp:0, maxmp:0, atk:8, def:5, mov:4, ele:"steel", atkMin:1, atkMax:1, pow:4, aele:"steel", note:"鋼の重装剣士。雷に弱い"},
+    {id:"ar",    side:"foe",  cls:"",      name:"実行部隊・射手",   kanji:"射", col:12, row:3, hp:18, maxhp:18, mp:0, maxmp:0, atk:7, def:3, mov:4, ele:"none",  atkMin:2, atkMax:3, pow:4, aele:"none",  note:"射程2-3の弓兵。接近戦は苦手"},
+    {id:"mg",    side:"foe",  cls:"",      name:"実行部隊・術師",   kanji:"術", col:12, row:5, hp:16, maxhp:16, mp:0, maxmp:0, atk:9, def:2, mov:3, ele:"fire",  atkMin:1, atkMax:3, pow:5, aele:"fire",  note:"火弾を放つ。風使いには通りが悪い"},
+  ].map(u => Object.assign(u, {alive:true, done:false, float:0, bind:0}));
+}
+/* ==================== 状態 ==================== */
+let units, turn, phase, sel, mode, armedSkill, moveFrom, hiTiles, busy, over;
+function resetGame(){
+  units = makeUnits(); turn = 1; phase = "player"; sel = null; mode = "idle";
+  armedSkill = null; moveFrom = null; hiTiles = new Map(); busy = false; over = false;
+  document.getElementById("log").innerHTML = "";
+  log("収穫祭の夜、工房街にセレイテッドダーク実行部隊が現れた。", "sys");
+  log("デュークとセリアで屋台通りを守り抜け。", "sys");
+  render();
+}
+/* ==================== ユーティリティ ==================== */
+const tileAt = (c, r) => MAP[r][c];
+const isWall = (c, r) => tileAt(c, r) === "#";
+const isShadow = (c, r) => tileAt(c, r) === "*";
+const inBoard = (c, r) => c >= 0 && c < W && r >= 0 && r < H;
+const unitAt = (c, r) => units.find(u => u.alive && u.col === c && u.row === r);
+const dist = (a, b) => Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
+const alliesOf = s => units.filter(u => u.alive && u.side === s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function log(msg, cls){
+  const el = document.getElementById("log");
+  const p = document.createElement("p");
+  if(cls) p.className = cls;
+  p.textContent = msg;
+  el.prepend(p);
+  while(el.children.length > 60) el.lastChild.remove();
+}
+/* BFS 移動可能範囲。敵ユニットは通れない、味方はすり抜け可、ユニット上では止まれない */
+function reachable(u){
+  const res = new Map();
+  const key = (c, r) => c + "," + r;
+  const q = [[u.col, u.row, 0]];
+  const seen = new Set([key(u.col, u.row)]);
+  while(q.length){
+    const [c, r, d] = q.shift();
+    res.set(key(c, r), {c, r});
+    if(d === u.mov) continue;
+    for(const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nc = c + dc, nr = r + dr, k = key(nc, nr);
+      if(!inBoard(nc, nr) || seen.has(k) || isWall(nc, nr)) continue;
+      const occ = unitAt(nc, nr);
+      if(occ && occ.side !== u.side) continue;
+      seen.add(k);
+      q.push([nc, nr, d + 1]);
+    }
+  }
+  // ユニットのいるマスは着地不可（自分の現在地は可）
+  for(const [k, t] of [...res]){
+    const occ = unitAt(t.c, t.r);
+    if(occ && occ !== u) res.delete(k);
+  }
+  return res;
+}
+/* スキルの対象敵リスト */
+function skillTargets(u, sk){
+  const foes = alliesOf(u.side === "ally" ? "foe" : "ally");
+  if(sk.kind === "range") return foes.filter(f => { const d = dist(u, f); return d >= sk.min && d <= sk.max; });
+  if(sk.kind === "line"){
+    const out = [];
+    for(const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      for(let i = 1; i <= sk.max; i++){
+        const c = u.col + dc * i, r = u.row + dr * i;
+        if(!inBoard(c, r) || isWall(c, r)) break;
+        const occ = unitAt(c, r);
+        if(occ){ if(occ.side !== u.side) out.push(occ); break; }
+      }
+    }
+    return out;
+  }
+  if(sk.kind === "burst") return foes.filter(f => dist(u, f) === 1);
+  return [];
+}
+function teleportTiles(u, sk){
+  const out = [];
+  for(let r = 0; r < H; r++) for(let c = 0; c < W; c++){
+    const d = Math.abs(c - u.col) + Math.abs(r - u.row);
+    if(d >= 1 && d <= sk.max && !isWall(c, r) && !unitAt(c, r)) out.push({c, r});
+  }
+  return out;
+}
+/* ==================== ダメージ ==================== */
+function applyDamage(att, def, pow, ele, tag){
+  let mult = eleMult(ele, def.ele);
+  let base = Math.max(1, att.atk + pow - def.def);
+  let notes = [];
+  if(mult !== 1) notes.push(`相性 ${ELE_JP[ele]}→${ELE_JP[def.ele]} ×${mult}`);
+  let shadowGuard = 1;
+  if(def.id === "celia" && isShadow(def.col, def.row)){ shadowGuard = 0.7; notes.push("影の加護 ×0.7"); }
+  const dmg = Math.max(1, Math.floor(base * mult * shadowGuard));
+  def.hp = Math.max(0, def.hp - dmg);
+  log(`${att.name}の${tag} → ${def.name}に ${dmg} ダメージ${notes.length ? "（" + notes.join("、") + "）" : ""}`, "imp");
+  popup(def.col, def.row, dmg);
+  if(def.hp === 0){
+    def.alive = false;
+    log(`${def.name}は倒れた！`, "sys");
+  }
+  return dmg;
+}
+function popup(c, r, text, heal){
+  const tile = document.querySelector(`.tile[data-c="${c}"][data-r="${r}"]`);
+  if(!tile) return;
+  const s = document.createElement("span");
+  s.className = "dmgpop" + (heal ? " heal" : "");
+  s.textContent = text;
+  tile.appendChild(s);
+  setTimeout(() => s.remove(), 850);
+}
+/* ==================== 描画 ==================== */
+function render(){
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for(let r = 0; r < H; r++) for(let c = 0; c < W; c++){
+    const t = document.createElement("div");
+    t.className = "tile";
+    t.dataset.c = c; t.dataset.r = r;
+    if(isWall(c, r)) t.classList.add("wall");
+    if(isShadow(c, r)) t.classList.add("shadow");
+    const hk = c + "," + r;
+    if(hiTiles.has(hk)) t.classList.add(hiTiles.get(hk));
+    const u = unitAt(c, r);
+    if(u){
+      const d = document.createElement("div");
+      d.className = `unit ${u.side} ${u.cls}${u.done && u.side === "ally" ? " done" : ""}${sel === u ? " selected" : ""}`;
+      d.textContent = u.kanji;
+      t.appendChild(d);
+      const hb = document.createElement("div");
+      hb.className = "hpbar" + (u.hp / u.maxhp <= .35 ? " low" : "");
+      hb.innerHTML = `<i style="width:${(u.hp / u.maxhp * 100).toFixed(0)}%"></i>`;
+      t.appendChild(hb);
+      const st = [];
+      if(u.float > 0) st.push("浮");
+      if(u.bind > 0) st.push("拘");
+      if(st.length){
+        const sd = document.createElement("div");
+        sd.className = "status";
+        sd.innerHTML = st.map(s => `<span>${s}</span>`).join("");
+        t.appendChild(sd);
+      }
+    }
+    if(isShadow(c, r)) t.title = "影マス：セリアがいる間、被ダメージ×0.7・スキルMP−1";
+    t.addEventListener("click", onTile);
+    board.appendChild(t);
+  }
+  document.getElementById("turnNo").textContent = turn;
+  const chip = document.getElementById("phaseChip");
+  chip.textContent = phase === "player" ? "プレイヤーフェイズ" : "エネミーフェイズ";
+  chip.className = "chip " + (phase === "player" ? "player" : "enemy");
+  renderPanel();
+}
+function barRow(label, val, max, cls){
+  return `<div class="bar ${cls}"><span>${label}</span><span class="track"><i style="width:${max ? (val / max * 100).toFixed(0) : 0}%"></i></span><span class="num">${val}/${max}</span></div>`;
+}
+function renderPanel(){
+  const card = document.getElementById("unitCard");
+  if(!sel){
+    card.innerHTML = `<h2>ユニット未選択</h2>
+      <p class="hint">青い駒（味方）をクリックして行動を開始。<br>
+      敵の駒をクリックすると能力を確認できます。<br><br>
+      <b style="color:var(--lantern)">勝利条件</b>：敵4体の撃破<br>
+      <b style="color:var(--foe)">敗北条件</b>：味方いずれかの戦闘不能<br><br>
+      毎ターン開始時に味方のMPが2回復します。</p>`;
+    return;
+  }
+  const u = sel;
+  let html = `<h2>${u.name} <span class="elechip">${ELE_JP[u.ele]}属性</span></h2>
+    <div class="bars">${barRow("HP", u.hp, u.maxhp, "hp")}${u.maxmp ? barRow("MP", u.mp, u.maxmp, "mp") : ""}</div>
+    <div class="stats"><span>攻<b>${u.atk}</b></span><span>防<b>${u.def}</b></span><span>移動<b>${u.mov}</b></span>${u.side === "foe" ? `<span>射程<b>${u.atkMin}-${u.atkMax}</b></span>` : ""}</div>
+    <p class="hint" style="margin-top:6px">${u.note}</p>`;
+  if(u.side === "ally" && phase === "player" && !u.done && !over){
+    const onShadowNow = u.id === "celia" && isShadow(u.col, u.row);
+    for(const sk of u.skills){
+      const cost = Math.max(0, sk.mp - (onShadowNow ? 1 : 0));
+      const usable = u.mp >= cost;
+      html += `<button class="skill${armedSkill === sk ? " armed" : ""}" data-sk="${sk.id}" ${usable ? "" : "disabled"}>
+        <span class="scost">MP ${cost}${onShadowNow && sk.mp > 0 ? "（影−1）" : ""}</span>
+        <span class="sname">${sk.name}</span>
+        <span class="sdesc">${sk.desc}${sk.ele !== "none" ? "／" + ELE_JP[sk.ele] + "属性" : ""}</span></button>`;
+    }
+    html += `<div class="rowbtns">
+      <button id="waitBtn">待機</button>
+      <button id="undoBtn" ${moveFrom ? "" : "disabled"}>移動やり直し</button>
+      <button id="deselBtn">選択解除</button></div>`;
+  }
+  card.innerHTML = html;
+  card.querySelectorAll(".skill").forEach(b => b.addEventListener("click", () => armSkill(b.dataset.sk)));
+  const w = document.getElementById("waitBtn"); if(w) w.addEventListener("click", () => finishAction(sel));
+  const un = document.getElementById("undoBtn"); if(un) un.addEventListener("click", undoMove);
+  const de = document.getElementById("deselBtn"); if(de) de.addEventListener("click", deselect);
+}
+/* ==================== 入力 ==================== */
+function onTile(e){
+  if(busy || over || phase !== "player") return;
+  const c = +e.currentTarget.dataset.c, r = +e.currentTarget.dataset.r;
+  const u = unitAt(c, r);
+  const hk = c + "," + r;
+  if(mode === "target" && armedSkill){
+    if(armedSkill.kind === "teleport" && hiTiles.get(hk) === "tp"){ execTeleport(sel, armedSkill, c, r); return; }
+    if(u && u.side === "foe" && hiTiles.get(hk) === "tg"){ execAttack(sel, armedSkill, u); return; }
+    disarm(); return;
+  }
+  if(u && u.side === "ally"){
+    if(u.done){ selectInfo(u); return; }
+    selectAlly(u); return;
+  }
+  if(u && u.side === "foe"){ selectInfo(u); return; }
+  if(sel && !sel.done && hiTiles.get(hk) === "mv" && mode === "move"){
+    if(!moveFrom) moveFrom = {c: sel.col, r: sel.row};
+    sel.col = c; sel.row = r;
+    showMoveRange(sel);
+    return;
+  }
+  deselect();
+}
+function selectAlly(u){
+  if(sel !== u){ moveFrom = null; }
+  sel = u; armedSkill = null; mode = "move";
+  showMoveRange(u);
+}
+function selectInfo(u){
+  sel = u; mode = "idle"; armedSkill = null; hiTiles = new Map();
+  if(u.side === "foe"){
+    // 敵の脅威範囲（移動+攻撃）を表示
+    const rs = reachable(u);
+    for(const t of rs.values()){
+      for(let dc = -u.atkMax; dc <= u.atkMax; dc++) for(let dr = -u.atkMax; dr <= u.atkMax; dr++){
+        const d = Math.abs(dc) + Math.abs(dr);
+        if(d < u.atkMin || d > u.atkMax) continue;
+        const c = t.c + dc, r = t.r + dr;
+        if(inBoard(c, r) && !isWall(c, r)) hiTiles.set(c + "," + r, "tg");
+      }
+    }
+  }
+  render();
+}
+function showMoveRange(u){
+  hiTiles = new Map();
+  for(const t of reachable(u).values()) hiTiles.set(t.c + "," + t.r, "mv");
+  if(moveFrom) hiTiles.set(moveFrom.c + "," + moveFrom.r, "selfrom");
+  render();
+}
+function armSkill(id){
+  const sk = sel.skills.find(s => s.id === id);
+  if(armedSkill === sk){ disarm(); return; }
+  armedSkill = sk; mode = "target"; hiTiles = new Map();
+  if(sk.kind === "teleport"){
+    for(const t of teleportTiles(sel, sk)) hiTiles.set(t.c + "," + t.r, "tp");
+  }else if(sk.kind === "burst"){
+    const ts = skillTargets(sel, sk);
+    if(!ts.length){ log("隣接する敵がいない。", "sys"); disarm(); return; }
+    execBurst(sel, sk, ts); return;
+  }else{
+    const ts = skillTargets(sel, sk);
+    if(!ts.length){ log("射程内に対象がいない。", "sys"); disarm(); return; }
+    for(const t of ts) hiTiles.set(t.col + "," + t.row, "tg");
+  }
+  render();
+}
+function disarm(){ armedSkill = null; mode = "move"; showMoveRange(sel); }
+function undoMove(){
+  if(!moveFrom) return;
+  sel.col = moveFrom.c; sel.row = moveFrom.r; moveFrom = null;
+  armedSkill = null; mode = "move";
+  showMoveRange(sel);
+}
+function deselect(){ sel = null; mode = "idle"; armedSkill = null; moveFrom = null; hiTiles = new Map(); render(); }
+/* ==================== スキル実行 ==================== */
+function payCost(u, sk){
+  const cost = Math.max(0, sk.mp - (u.id === "celia" && isShadow(u.col, u.row) ? 1 : 0));
+  u.mp -= cost;
+}
+function execAttack(u, sk, target){
+  payCost(u, sk);
+  render();
+  let pow = sk.pow;
+  const notes = [];
+  if(sk.id === "rise" && isShadow(target.col, target.row)){ pow += 3; notes.push("影の増幅 威力+3"); }
+  if(notes.length) log(notes.join("、"), "sys");
+  applyDamage(u, target, pow, sk.ele, sk.name);
+  if(target.alive && sk.fx === "float"){ target.float = 1; log(`${target.name}は浮遊した（次の行動不能）`, "imp"); }
+  if(target.alive && sk.fx === "bind"){ target.bind = 2; log(`${target.name}は拘束された（2ターン移動不能）`, "imp"); }
+  finishAction(u);
+}
+function execTeleport(u, sk, c, r){
+  payCost(u, sk);
+  u.col = c; u.row = r;
+  log(`${u.name}のブレードシフト——刀の標へ転移！`, "imp");
+  render();
+  const adj = alliesOf("foe").filter(f => dist(u, f) === 1);
+  for(const f of adj) applyDamage(u, f, sk.pow, sk.ele, sk.name + "・雷撃");
+  if(!adj.length) log("転移地点の周囲に敵はいない。", "sys");
+  finishAction(u);
+}
+function execBurst(u, sk, targets){
+  payCost(u, sk);
+  render();
+  for(const f of targets){
+    const dc = Math.sign(f.col - u.col), dr = Math.sign(f.row - u.row);
+    let pow = sk.pow, pushed = 0;
+    for(let i = 0; i < 2; i++){
+      const nc = f.col + dc, nr = f.row + dr;
+      if(!inBoard(nc, nr) || isWall(nc, nr) || unitAt(nc, nr)){ pow += 2; break; }
+      f.col = nc; f.row = nr; pushed++;
+    }
+    applyDamage(u, f, pow, sk.ele, sk.name + (pushed ? `（${pushed}マス弾き飛ばし）` : "（激突）"));
+  }
+  finishAction(u);
+}
+function finishAction(u){
+  u.done = true; sel = null; mode = "idle"; armedSkill = null; moveFrom = null; hiTiles = new Map();
+  render();
+  if(checkEnd()) return;
+  if(alliesOf("ally").every(a => a.done)) enemyPhase();
+}
+/* ==================== 敵ターン ==================== */
+async function enemyPhase(){
+  busy = true; phase = "enemy"; render();
+  await sleep(500);
+  for(const f of units.filter(x => x.side === "foe")){
+    if(!f.alive || over) continue;
+    await foeAct(f);
+    if(checkEnd()){ busy = false; return; }
+    await sleep(420);
+  }
+  for(const f of alliesOf("foe")) if(f.bind > 0) f.bind--;
+  turn++;
+  phase = "player";
+  for(const a of alliesOf("ally")){
+    a.done = false;
+    if(a.maxmp) a.mp = Math.min(a.maxmp, a.mp + 2);
+  }
+  log(`—— ターン ${turn} ——`, "sys");
+  busy = false;
+  render();
+}
+async function foeAct(f){
+  if(f.float > 0){
+    f.float--;
+    log(`${f.name}は浮遊していて行動できない。`);
+    render();
+    return;
+  }
+  const allies = alliesOf("ally");
+  if(!allies.length) return;
+  const spots = f.bind > 0 ? [{c: f.col, r: f.row}] : [...reachable(f).values()];
+  let best = null;
+  for(const t of spots){
+    let tScore = -Math.min(...allies.map(a => Math.abs(a.col - t.c) + Math.abs(a.row - t.r)));
+    let victim = null;
+    for(const a of allies){
+      const d = Math.abs(a.col - t.c) + Math.abs(a.row - t.r);
+      if(d >= f.atkMin && d <= f.atkMax && (!victim || a.hp < victim.hp)) victim = a;
+    }
+    const score = (victim ? 1000 - victim.hp : 0) + tScore;
+    if(!best || score > best.score) best = {t, victim, score};
+  }
+  if(best.t.c !== f.col || best.t.r !== f.row){
+    f.col = best.t.c; f.row = best.t.r;
+    render();
+    await sleep(300);
+  }
+  if(best.victim){
+    applyDamage(f, best.victim, f.pow, f.aele, "攻撃");
+    render();
+  }else if(f.bind > 0){
+    log(`${f.name}は拘束されて動けない。`);
+  }
+}
+/* ==================== 勝敗 ==================== */
+function checkEnd(){
+  if(over) return true;
+  if(!alliesOf("foe").length){
+    over = true;
+    showResult(true);
+    return true;
+  }
+  if(units.some(u => u.side === "ally" && !u.alive)){
+    over = true;
+    showResult(false);
+    return true;
+  }
+  return false;
+}
+function showResult(win){
+  const box = document.getElementById("dialogBox");
+  box.innerHTML = win
+    ? `<h2 class="result-title">勝　利</h2>
+       <p class="result-body">実行部隊は撤退した。屋台通りに、祭りの喧騒が戻ってくる。<br>
+       「……終わったな」デュークが刀を納める。セリアの影が、静かに揺れた。</p>
+       <p class="result-body" style="color:var(--ink-dim);font-size:.78rem">クリアターン数: ${turn}</p>
+       <button class="start" id="againBtn">もう一度</button>`
+    : `<h2 class="result-title" style="color:var(--foe)">敗　北</h2>
+       <p class="result-body">守り切れなかった——夜の工房街に、黒い月と剣の紋章が翻る。</p>
+       <button class="start" id="againBtn">再挑戦</button>`;
+  document.getElementById("overlay").classList.remove("hidden");
+  document.getElementById("againBtn").addEventListener("click", () => {
+    document.getElementById("overlay").classList.add("hidden");
+    resetGame();
+  });
+}
+/* ==================== ヘルプ ==================== */
+function showHelp(intro){
+  const box = document.getElementById("dialogBox");
+  box.innerHTML = `
+    <h2>翠嵐と幽闇</h2>
+    <p class="lede">収穫祭の夜 · 工房街防衛戦</p>
+    <p>デュークとセリアの2人で、セレイテッドダーク実行部隊4体を撃破せよ。味方がどちらか1人でも倒れたら敗北。</p>
+    <h3>操作</h3>
+    <ul>
+      <li>味方をクリック → 青いマスをクリックで移動（行動前なら「移動やり直し」可）</li>
+      <li>スキルをクリック → 赤いマス（対象）か紫のマス（転移先）をクリックで実行</li>
+      <li>行動は1ユニットにつき1回。「待機」でターンを渡す。毎ターンMPが2回復</li>
+      <li>敵をクリックすると脅威範囲（移動+攻撃）が赤く表示される</li>
+    </ul>
+    <h3>属性相性</h3>
+    <table>
+      <tr><th>相性</th><th>倍率</th><th>覚え方</th></tr>
+      <tr><td>雷 → 鋼</td><td>×1.5</td><td>金属は雷を通す。剣士に稲魂・荒嵐破</td></tr>
+      <tr><td>風 → 火</td><td>×1.25</td><td>風は火の軌道を乱す。術師に小夜嵐</td></tr>
+      <tr><td>火 → 風</td><td>×0.75</td><td>デュークは火弾を風で逸らせる</td></tr>
+    </table>
+    <h3>影マス（紫の暗いマス）</h3>
+    <ul>
+      <li>セリアが影マスにいる間：被ダメージ×0.7、スキルMP−1</li>
+      <li>シャドウライズは<b>影マスの上にいる敵</b>に威力+3</li>
+    </ul>
+    <h3>ブレードシフト（稲魂）</h3>
+    <ul>
+      <li>デュークは4マス以内の空きマスへ転移し、隣接する敵全員に雷撃</li>
+      <li>壁の向こうにも転移できる。囲まれた時の脱出にも、強襲にも</li>
+    </ul>
+    <p style="color:var(--ink-dim);font-size:.76rem">プロトタイプ仕様：反撃なし・命中率100%・乱数なしの確定ダメージ。</p>
+    <button class="start" id="startBtn">${intro ? "出　撃" : "戻　る"}</button>`;
+  document.getElementById("overlay").classList.remove("hidden");
+  document.getElementById("startBtn").addEventListener("click", () => {
+    document.getElementById("overlay").classList.add("hidden");
+  });
+}
+/* ==================== 起動 ==================== */
+document.getElementById("helpBtn").addEventListener("click", () => showHelp(false));
+document.getElementById("resetBtn").addEventListener("click", resetGame);
+resetGame();
+showHelp(true);
+</script>
+</body>
+</html>
